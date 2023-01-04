@@ -1,0 +1,10 @@
+{
+  "scripts": {
+    "format": "yarn format:prettier",
+    "format:prettier": "prettier --write --ignore-unknown '**/**'"
+  },
+  "devDependencies": {
+    "prettier": "~2.8.1",
+    "prettier-plugin-toml": "~0.3.1"
+  }
+}
