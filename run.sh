@@ -11,7 +11,6 @@ sudo setcap cap_net_admin=eip target/release/tcp-rust
 
 echo "Running the process in the background"
 target/release/tcp-rust &
-echo "Keeping the process ID of that"
 pid=$!
 
 # TODO: There should not be any setup lag
