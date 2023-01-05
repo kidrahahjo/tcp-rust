@@ -1,4 +1,17 @@
+mod tcp;
+
+use std::collections::HashMap;
+use std::net::Ipv4Addr;
+
+#[derive(Clone, Copy, Debug, Hash, Eq, PartialEq)]
+struct Quad {
+    src: (Ipv4Addr, u16),
+    dst: (Ipv4Addr, u16),
+}
+
 fn main() {
+    let mut connections: HashMap<Quad, tcp::State> = Default::default();
+
     let nic =
         tun_tap::Iface::new("tun0", tun_tap::Mode::Tun).expect("failed to create an interface");
 
@@ -26,23 +39,40 @@ fn main() {
         }
 
         match etherparse::Ipv4HeaderSlice::from_slice(&buf[4..nbytes]) {
-            Ok(packet) => {
-                let src = packet.source_addr();
-                let dest = packet.destination_addr();
-                let proto = packet.protocol();
+            Ok(ipv4_header_slice) => {
+                let src = ipv4_header_slice.source_addr();
+                let dest = ipv4_header_slice.destination_addr();
+                let proto = ipv4_header_slice.protocol();
 
                 if proto != 0x06 {
                     // Not a TCP Protocol
                     continue;
                 }
 
-                eprintln!(
-                    "{} -> {}, {} bytes of protocol: {}",
-                    src,
-                    dest, 
-                    packet.payload_len(),
-                    proto,
-                );
+                match etherparse::TcpHeaderSlice::from_slice(
+                    &buf[4 + ipv4_header_slice.slice().len()..],
+                ) {
+                    Ok(tcp_header_slice) => {
+                        let datai =
+                            4 + ipv4_header_slice.slice().len() + tcp_header_slice.slice().len();
+
+                        connections
+                            .entry(Quad {
+                                src: (src, tcp_header_slice.source_port()),
+                                dst: (dest, tcp_header_slice.destination_port()),
+                            })
+                            .or_insert(tcp::State {})
+                            .on_packet(
+                                &mut nic,
+                                ipv4_header_slice,
+                                tcp_header_slice,
+                                &buf[datai..nbytes],
+                            );
+                    }
+                    Err(e) => {
+                        eprintln!("Error parsing TCP Header {:?}", e)
+                    }
+                }
             }
             Err(e) => {
                 eprintln!("Ignoring weird packet {:?}", e);
